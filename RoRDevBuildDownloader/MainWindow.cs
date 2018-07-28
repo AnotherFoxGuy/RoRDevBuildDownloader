@@ -17,13 +17,15 @@ namespace RoRDevBuildDownloader
 		string installedVersion;
 		string dlURL;
 		string fileName;
+		string tempFolder;
 
 		public MainForm()
 		{
 			InitializeComponent();
 
 			installedVersion = Properties.Settings.Default.InstalledVersion;
-			fileName = $"{Path.GetTempPath()}RoRDevBuild.zip";
+			fileName	= $"{Path.GetTempPath()}\\RoRDevBuild.zip";
+			tempFolder	= $"{Path.GetTempPath()}\\RoR-dev-build";
 
 			LOG("Getting newest version...");
 			XmlDocument doc = new XmlDocument();
@@ -39,10 +41,11 @@ namespace RoRDevBuildDownloader
 				//LOG(x.InnerText); 
 				Match m = reg.Match(x.InnerText);
 				if(m.Success)
-				{					
-					LOG($"Version found: {m.Value}");
+				{
 					dlURL = elemList[i]["link"].InnerText;
 					latestVersion = m.Value;
+					LOG($"Version found: {latestVersion}");
+					LOG($"Will update from {installedVersion} to {latestVersion}");
 					break;
 				}
 			}
@@ -50,6 +53,7 @@ namespace RoRDevBuildDownloader
 			if(latestVersion != null)
 			{
 				UpdateButton.Enabled = true;
+				UpdateButton.Text = "Repair";
 				if (latestVersion == installedVersion)
 					MessageBox.Show($"Already up to date");
 			}
@@ -73,8 +77,11 @@ namespace RoRDevBuildDownloader
 		private void ExtractZip(object sender, AsyncCompletedEventArgs e)
 		{
 			LOG($"Extracting zip: {fileName} to {Application.StartupPath}");
-			ZipFile.ExtractToDirectory(fileName, Application.StartupPath);
+			ZipFile.ExtractToDirectory(fileName, tempFolder);
+			CopyDirectory(tempFolder, Application.StartupPath, true);
 			Properties.Settings.Default.InstalledVersion = latestVersion;
+			Properties.Settings.Default.Save();
+			Directory.Delete(tempFolder, true);
 			LOG("Done!");
 			MessageBox.Show($"Done!\nUpdated from {installedVersion} to {latestVersion}");
 		}
@@ -82,6 +89,44 @@ namespace RoRDevBuildDownloader
 		private void LOG(string txt)
 		{
 			LogWindow.AppendText($"{txt}\n");
+		}
+
+		private static void CopyDirectory(string sourceDirName, string destDirName, bool copySubDirs)
+		{
+			// Get the subdirectories for the specified directory.
+			DirectoryInfo dir = new DirectoryInfo(sourceDirName);
+
+			if (!dir.Exists)
+			{
+				throw new DirectoryNotFoundException(
+					"Source directory does not exist or could not be found: "
+					+ sourceDirName);
+			}
+
+			DirectoryInfo[] dirs = dir.GetDirectories();
+			// If the destination directory doesn't exist, create it.
+			if (!Directory.Exists(destDirName))
+			{
+				Directory.CreateDirectory(destDirName);
+			}
+
+			// Get the files in the directory and copy them to the new location.
+			FileInfo[] files = dir.GetFiles();
+			foreach (FileInfo file in files)
+			{
+				string temppath = Path.Combine(destDirName, file.Name);
+				file.CopyTo(temppath, true);
+			}
+
+			// If copying subdirectories, copy them and their contents to new location.
+			if (copySubDirs)
+			{
+				foreach (DirectoryInfo subdir in dirs)
+				{
+					string temppath = Path.Combine(destDirName, subdir.Name);
+					CopyDirectory(subdir.FullName, temppath, copySubDirs);
+				}
+			}
 		}
 	}
 }
